@@ -1,0 +1,95 @@
+version: '3.5'
+services:
+  server:
+    image: zabbix/zabbix-server-pgsql:alpine-latest
+    ports:
+      - "10051:10051"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro 
+      - /usr/lib/zabbix/alertscripts:/usr/lib/zabbix/alertscripts:ro
+      - /usr/lib/zabbix/externalscripts:/usr/lib/zabbix/externalscripts:ro
+      - /var/lib/zabbix/export:/var/lib/zabbix/export:rw
+      - /var/lib/zabbix/modules:/var/lib/zabbix/modules:ro
+      - /var/lib/zabbix/enc:/var/lib/zabbix/enc:ro
+      - /var/lib/zabbix/ssh_keys:/var/lib/zabbix/ssh_keys:ro
+      - /var/lib/zabbix/mibs:/var/lib/zabbix/mibs:ro
+      - /var/lib/zabbix/snmptraps:/var/lib/zabbix/snmptraps:ro
+    restart: always
+    depends_on:
+      - postgres-server
+    environment:
+      - POSTGRES_USER=zabbix
+      - POSTGRES_PASSWORD=zabbix
+      - POSTGRES_DB=zabbix
+    networks:
+      - zabbix-network
+  web-nginx-pgsql:
+    image: zabbix/zabbix-web-nginx-pgsql:alpine-latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /usr/share/zabbix/modules/:/usr/share/zabbix/modules/:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    sysctls:
+      - net.core.somaxconn=65535
+    restart: always
+    depends_on:
+      - server
+      - postgres-server
+    environment:
+      - POSTGRES_USER=zabbix
+      - POSTGRES_PASSWORD=zabbix
+      - POSTGRES_DB=zabbix
+      - ZBX_SERVER_HOST=server
+      - ZBX_POSTMAXSIZE=64M
+      - PHP_TZ=Europe/Moscow
+      - ZBX_MAXEXECUTIONTIME=500
+    networks:
+      - zabbix-network
+  agent:
+    image: zabbix/zabbix-agent:alpine-latest
+    ports:
+      - "10050:10050"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /proc:/proc
+      - /sys:/sys
+      - /dev:/dev
+      - /var/run/docker.sock:/var/run/docker.sock
+    privileged: true
+    pid: "host"
+    restart: always
+    depends_on:
+      - server
+    environment:
+      - ZBX_SERVER_HOST=server
+    networks:
+      - zabbix-network
+  postgres-server:
+    image: postgres:latest
+    restart: always
+    volumes:
+      - /var/lib/postgresql/data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=zabbix
+      - POSTGRES_USER=zabbix
+      - POSTGRES_DB=zabbix
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zabbix-network
+networks:
+  zabbix-network:
+    driver: bridge
