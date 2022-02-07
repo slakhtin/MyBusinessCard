@@ -1,0 +1,15 @@
+version: '3.5'
+
+services:
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+     TZ: Europe/Moscow
+    ports:
+      - 3000:3000
+    user: '0'
+    volumes:
+      - /var/lib/grafana/plugins:/var/lib/grafana/plugins
+      - /var/lib/grafana:/var/lib/grafana
+    restart: always
